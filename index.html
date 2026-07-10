@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cashflow Compass</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root {
+    --ink: #221512; --inkSoft: #5B4A42; --parchment: #F4EFEA; --paper: #FBF8F4;
+    --burgundy: #7D141D; --burgundyDeep: #57090F; --sage: #6B7A56; --amber: #B8862E;
+    --clay: #A8493E; --line: #DDD3C7;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; background: var(--parchment); color: var(--ink); font-family: 'Inter', sans-serif; }
+  #root { min-height: 100vh; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .display { font-family: 'Fraunces', serif; }
+  .navbtn { display:flex; align-items:center; gap:10px; padding:11px 16px; border-radius:8px; cursor:pointer; font-size:14px; font-weight:500; color:var(--inkSoft); transition: all .15s; border:1px solid transparent; }
+  .navbtn:hover:not(.disabled) { background:var(--paper); }
+  .navbtn.active { background:var(--burgundy); color:var(--parchment); }
+  .navbtn.disabled { opacity:.4; cursor:not-allowed; }
+  .card { background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:22px; }
+  .btn { background:var(--burgundy); color:var(--parchment); border:none; padding:10px 18px; border-radius:7px; font-weight:600; font-size:14px; cursor:pointer; display:inline-flex; align-items:center; gap:8px; transition: background .15s; }
+  .btn:hover { background:var(--burgundyDeep); }
+  .btn.ghost { background:transparent; color:var(--burgundy); border:1px solid var(--burgundy); }
+  .btn.ghost:hover { background:rgba(125,20,29,0.06); }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--inkSoft); border-bottom:1px solid var(--line); padding:8px 10px; font-weight:600;}
+  td { padding:9px 10px; border-bottom:1px solid var(--line); font-size:14px; }
+  select, input[type=text], input[type=number] { font-family:'Inter',sans-serif; border:1px solid var(--line); border-radius:6px; padding:7px 10px; font-size:13px; background:var(--paper); color:var(--ink); }
+  .quiz-opt { display:block; width:100%; text-align:left; padding:14px 16px; border:1px solid var(--line); border-radius:8px; background:var(--paper); cursor:pointer; margin-bottom:9px; font-size:14.5px; transition: all .12s; }
+  .quiz-opt:hover { border-color:var(--burgundy); background:rgba(125,20,29,0.04); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react,env">
+const { useState, useMemo, useEffect, useRef } = React;
+
+/* ---------------------------------- icon set ---------------------------------- */
+function Icon({ name, size = 16, color = "currentColor", style }) {
+  const p = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round", style };
+  switch (name) {
+    case "upload": return <svg {...p}><path d="M12 15V3" /><path d="M7 8l5-5 5 5" /><path d="M4 21h16" /></svg>;
+    case "list": return <svg {...p}><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" /></svg>;
+    case "landmark": return <svg {...p}><polygon points="12,3 21,9 3,9" /><line x1="4" y1="9" x2="4" y2="19" /><line x1="10" y1="9" x2="10" y2="19" /><line x1="14" y1="9" x2="14" y2="19" /><line x1="20" y1="9" x2="20" y2="19" /><line x1="2" y1="21" x2="22" y2="21" /></svg>;
+    case "brain": return <svg {...p}><circle cx="12" cy="12" r="8" /><path d="M9 9c0-1.5 1-2.5 2.5-2.5S14 7.5 14 9c0 1-1 1.5-1 2.5s1 1.5 1 2.5c0 1.5-1 2.5-2.5 2.5S9 15 9 13.5" /></svg>;
+    case "trendingUp": return <svg {...p}><polyline points="3 17 9 11 13 15 21 5" /><polyline points="14 5 21 5 21 12" /></svg>;
+    case "trash": return <svg {...p}><rect x="5" y="7" width="14" height="14" rx="2" /><line x1="3" y1="7" x2="21" y2="7" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" /><path d="M9 7V4h6v3" /></svg>;
+    case "check": return <svg {...p}><polyline points="4 12 9 17 20 6" /></svg>;
+    case "alertTriangle": return <svg {...p}><path d="M12 3 2 21h20z" /><line x1="12" y1="9" x2="12" y2="14" /><circle cx="12" cy="17.3" r="0.6" fill={color} stroke="none" /></svg>;
+    case "plusCircle": return <svg {...p}><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>;
+    case "chevronRight": return <svg {...p}><polyline points="9 6 15 12 9 18" /></svg>;
+    case "arrowRight": return <svg {...p}><line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" /></svg>;
+    case "fileText": return <svg {...p}><path d="M6 3h9l5 5v13H6z" /><line x1="9" y1="12" x2="17" y2="12" /><line x1="9" y1="16" x2="17" y2="16" /></svg>;
+    case "sparkles": return <svg {...p} fill={color} stroke="none"><path d="M12 3l1.6 4.9L18 9.4l-4.4 1.5L12 15.8l-1.6-4.9L6 9.4l4.4-1.5z" /></svg>;
+    case "piggyBank": return <svg {...p}><circle cx="12" cy="13" r="7" /><circle cx="8" cy="10" r="0.7" fill={color} stroke="none" /><path d="M12 6V3" /><path d="M9.5 20v1.3" /><path d="M14.5 20v1.3" /></svg>;
+    case "creditCard": return <svg {...p}><rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" y1="10" x2="22" y2="10" /></svg>;
+    default: return null;
+  }
+}
+
+/* ---------------------------------- tokens ---------------------------------- */
+const T = {
+  ink: "#221512", inkSoft: "#5B4A42", parchment: "#F4EFEA", paper: "#FBF8F4",
+  burgundy: "#7D141D", burgundyDeep: "#57090F", sage: "#6B7A56", amber: "#B8862E", clay: "#A8493E", line: "#DDD3C7",
+};
+
+const CAT_COLORS = {
+  Housing: "#7D141D", Utilities: "#8B6F47", Groceries: "#6B7A56", Dining: "#C4A35A",
+  Transportation: "#4A5568", Subscriptions: "#94493E", Insurance: "#5A0E15", "Debt Payments": "#3D3128",
+  Shopping: "#A8493E", Entertainment: "#B8862E", Healthcare: "#7A8471", "Transfer/Savings": "#9C8064",
+  Income: "#6B7A56", "Income (other)": "#8FA37C", Uncategorized: "#B7ADA2",
+};
+const catColor = (c) => CAT_COLORS[c] || "#B7ADA2";
+
+/* ---------------------------------- categorization rules ---------------------------------- */
+const RULES = [
+  ["Income", ["payroll", "direct deposit", "salary", "paycheck", "adp", "gusto"]],
+  ["Housing", ["rent", "mortgage", " hoa ", "landlord", "property mgmt"]],
+  ["Utilities", ["electric", "pseg", "jcp&l", "con edison", "water co", "utility", "utilities", "comcast", "xfinity", "internet", "gas company"]],
+  ["Insurance", ["geico", "progressive", "allstate", "state farm", "insurance", "liberty mutual"]],
+  ["Debt Payments", ["loan payment", "student loan", "auto loan", "credit card payment", "capital one pmt", "discover pmt", "amex payment", "navient", "sallie mae", "car payment"]],
+  ["Groceries", ["whole foods", "trader joe", "shoprite", "stop & shop", "kroger", "safeway", "aldi", "wegmans", "grocery", "acme markets", "costco"]],
+  ["Dining", ["starbucks", "restaurant", "doordash", "uber eats", "ubereats", "grubhub", "chipotle", "mcdonald", "coffee", "cafe", "pizza", "dunkin", "chick-fil-a", "bar tab"]],
+  ["Transportation", ["shell", "exxon", "chevron", "uber", "lyft", "gas station", "parking", "nj transit", "ezpass", "e-zpass", "septa", "mta", "sunoco", "bp gas"]],
+  ["Subscriptions", ["netflix", "spotify", "hulu", "disney+", "apple.com/bill", "subscription", "hbo max", "youtube premium", "audible"]],
+  ["Entertainment", ["amc", "ticketmaster", "steam", "playstation", "xbox", "movie", "regal cinemas", "concert"]],
+  ["Healthcare", ["pharmacy", "cvs", "walgreens", "medical", "dental", "copay", "urgent care", "labcorp"]],
+  ["Shopping", ["amazon", "target", "walmart", "best buy", "macy's", "tj maxx", "marshalls", "ikea", "etsy"]],
+  ["Transfer/Savings", ["transfer to savings", "zelle", "venmo", "internal transfer", "savings deposit"]],
+];
+
+function categorize(desc, amount) {
+  const d = (desc || "").toLowerCase();
+  for (const [cat, kws] of RULES) {
+    if (kws.some((k) => d.indexOf(k) !== -1)) return cat;
+  }
+  return amount > 0 ? "Income (other)" : "Uncategorized";
+}
+const ALL_CATEGORIES = [...new Set(RULES.map((r) => r[0])), "Income (other)", "Uncategorized"];
+
+/* ---------------------------------- csv parsing helpers ---------------------------------- */
+function parseMoney(v) {
+  if (v === undefined || v === null || v === "") return 0;
+  let s = String(v).trim();
+  let neg = false;
+  if (s.charAt(0) === "(" && s.charAt(s.length - 1) === ")") { neg = true; s = s.slice(1, -1); }
+  s = s.replace(/[$,]/g, "");
+  let n = parseFloat(s);
+  if (isNaN(n)) return 0;
+  if (neg) n = -Math.abs(n);
+  return n;
+}
+function findCol(headers, patterns) {
+  const lower = headers.map((h) => h.toLowerCase());
+  for (const p of patterns) {
+    const idx = lower.findIndex((h) => h.indexOf(p) !== -1);
+    if (idx !== -1) return headers[idx];
+  }
+  return null;
+}
+function uid() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+/* ---------------------------------- quiz ---------------------------------- */
+const QUIZ = [
+  { axis: "security", q: "A surprise $1,200 car repair bill shows up. Your gut reaction is:",
+    opts: [
+      { t: "Relief that I have a cushion set aside for exactly this.", v: 3 },
+      { t: "Annoyed, but I'll cover it and adjust next month.", v: 1 },
+      { t: "I'd have to move money around or use a card.", v: 0 },
+      { t: "Doesn't matter much either way, I'll figure it out.", v: 0 },
+    ] },
+  { axis: "security", q: "How do you feel about carrying zero cash buffer while aggressively paying down debt?",
+    opts: [
+      { t: "Very uncomfortable — I want a safety net first, no matter the interest cost.", v: 3 },
+      { t: "A little uneasy, but I'd tolerate a small buffer.", v: 2 },
+      { t: "Fine with a bare-minimum buffer if it kills debt faster.", v: 1 },
+      { t: "Totally fine — debt is the bigger risk to me.", v: 0 },
+    ] },
+  { axis: "momentum", q: "When you're working toward a big goal, what keeps you going?",
+    opts: [
+      { t: "Visible progress and small wins along the way.", v: 3 },
+      { t: "A mix — I like wins but I check the math too.", v: 2 },
+      { t: "Knowing I'm being efficient, even if progress feels slow.", v: 0 },
+      { t: "A system running in the background so I don't have to think about it.", v: 1 },
+    ] },
+  { axis: "momentum", q: "Two debts: a $600 balance at 12% APR, and a $4,000 balance at 22% APR. Which do you want to attack first?",
+    opts: [
+      { t: "The $600 one — knock it out and feel it disappear.", v: 3 },
+      { t: "The $4,000 one — it's costing me the most in interest.", v: 0 },
+      { t: "Whichever a system tells me to prioritize.", v: 1 },
+      { t: "I'd split payments evenly across both.", v: 1 },
+    ] },
+  { axis: "structure", q: "How do you actually manage your money day to day?",
+    opts: [
+      { t: "Automated transfers and rules — I set it up once and let it run.", v: 3 },
+      { t: "I check in and move money manually when I think of it.", v: 0 },
+      { t: "A mix of automation and manual check-ins.", v: 2 },
+      { t: "Honestly, pretty reactively.", v: 0 },
+    ] },
+  { axis: "structure", q: "A new budgeting rule works best for you if it's:",
+    opts: [
+      { t: "A fixed, non-negotiable system I don't have to re-decide every month.", v: 3 },
+      { t: "Flexible, adjusting to whatever's happening that month.", v: 0 },
+      { t: "Simple percentages I can apply automatically.", v: 2 },
+      { t: "Whatever feels right in the moment.", v: 0 },
+    ] },
+  { axis: "security", q: "How would you describe your relationship with debt emotionally?",
+    opts: [
+      { t: "It weighs on me until I have real breathing room around it.", v: 2 },
+      { t: "It's just a math problem to optimize.", v: 0 },
+      { t: "I don't think about it much day to day.", v: 0 },
+      { t: "It motivates me — I want it gone as fast as possible.", v: 1 },
+    ] },
+  { axis: "momentum", q: "You just paid off a small balance. What matters most next?",
+    opts: [
+      { t: "Rolling that payment straight into the next target immediately.", v: 3 },
+      { t: "Taking a second to recalculate the mathematically optimal next move.", v: 0 },
+      { t: "Confirming the automation picked up the new target.", v: 1 },
+      { t: "Splitting the freed-up cash between savings and debt.", v: 1 },
+    ] },
+];
+
+const ARCHETYPES = {
+  Guardian: { name: "The Guardian", tagline: "Safety net first, then attack debt with confidence.", method: "avalanche", efundMonths: 6,
+    splitDuringEfund: { save: 1, debt: 0 }, splitAfterEfund: { save: 0.2, debt: 0.8 },
+    blurb: "You think clearly about money once you feel protected. Rather than rushing the highest-interest debt immediately, you build a real cushion first — then move with focus toward paying off the most expensive debt fastest." },
+  Sprinter: { name: "The Sprinter", tagline: "Small wins, fast momentum, visible progress.", method: "snowball", efundMonths: 1,
+    splitDuringEfund: { save: 1, debt: 0 }, splitAfterEfund: { save: 0.15, debt: 0.85 },
+    blurb: "You're motivated by seeing accounts hit zero. A one-month starter buffer is enough for you — after that, every spare dollar should go toward knocking out your smallest balance first, then rolling that payment into the next." },
+  Architect: { name: "The Architect", tagline: "Systems over willpower — automate the whole thing.", method: "avalanche", efundMonths: 3,
+    splitDuringEfund: { save: 0.7, debt: 0.3 }, splitAfterEfund: { save: 0.5, debt: 0.5 },
+    blurb: "You do best when decisions are made once and then automated. A steady, evenly-split system — automatic transfers into savings and automatic extra payments toward your highest-interest debt — fits how you actually operate." },
+  Strategist: { name: "The Strategist", tagline: "Math-optimal, minimize total interest paid.", method: "avalanche", efundMonths: 3,
+    splitDuringEfund: { save: 1, debt: 0 }, splitAfterEfund: { save: 0.2, debt: 0.8 },
+    blurb: "You want the numerically best outcome. That means a modest 3-month buffer, then throwing everything extra at the highest-APR debt first — mathematically the fastest way to minimize what you pay in interest overall." },
+};
+
+function scoreQuiz(answers) {
+  const totals = { security: 0, momentum: 0, structure: 0 };
+  QUIZ.forEach((q, i) => { if (answers[i] !== undefined) totals[q.axis] += q.opts[answers[i]].v; });
+  let archetype = "Strategist";
+  if (totals.security >= 5) archetype = "Guardian";
+  else if (totals.momentum >= 5) archetype = "Sprinter";
+  else if (totals.structure >= 4) archetype = "Architect";
+  return { totals, archetype };
+}
+
+/* ---------------------------------- debt simulation ---------------------------------- */
+function simulateDebtPayoff(debts, extraMonthly, method) {
+  let pool = debts.map((d) => ({ ...d, balance: d.balance }));
+  if (pool.length === 0 || pool.every((d) => d.balance <= 0)) return { months: 0, totalInterest: 0, order: [] };
+  const order = [];
+  let months = 0, totalInterest = 0;
+  const maxMonths = 600;
+  while (pool.some((d) => d.balance > 0.01) && months < maxMonths) {
+    months++;
+    pool.forEach((d) => {
+      if (d.balance > 0) {
+        const interest = (d.balance * (d.apr / 100)) / 12;
+        totalInterest += interest;
+        d.balance += interest;
+      }
+    });
+    pool.forEach((d) => {
+      if (d.balance > 0) {
+        const pay = Math.min(d.minPayment, d.balance);
+        d.balance -= pay;
+      }
+    });
+    let extra = extraMonthly;
+    const active = pool.filter((d) => d.balance > 0.01);
+    active.sort((a, b) => (method === "avalanche" ? b.apr - a.apr : a.balance - b.balance));
+    for (const d of active) {
+      if (extra <= 0) break;
+      const pay = Math.min(extra, d.balance);
+      d.balance -= pay;
+      extra -= pay;
+      if (d.balance <= 0.01 && order.indexOf(d.name) === -1) order.push(d.name);
+    }
+  }
+  return { months, totalInterest, order };
+}
+
+const BENCHMARKS = {
+  Housing: 0.30, Transportation: 0.15, Groceries: 0.12, Dining: 0.08,
+  Subscriptions: 0.04, Shopping: 0.08, Entertainment: 0.05, Healthcare: 0.05, Insurance: 0.10,
+};
+
+/* ---------------------------------- donut chart ---------------------------------- */
+function DonutChart({ data, size = 210, thickness = 30 }) {
+  const total = data.reduce((s, d) => s + d.monthly, 0) || 1;
+  const radius = (size - thickness) / 2;
+  const circumference = 2 * Math.PI * radius;
+  let offset = 0;
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <g transform={`translate(${size / 2},${size / 2}) rotate(-90)`}>
+        <circle r={radius} fill="none" stroke="#EFE8DF" strokeWidth={thickness} />
+        {data.map((d, i) => {
+          const frac = d.monthly / total;
+          const dash = frac * circumference;
+          const el = (
+            <circle key={i} r={radius} fill="none" stroke={catColor(d.category)} strokeWidth={thickness}
+              strokeDasharray={`${dash} ${circumference - dash}`} strokeDashoffset={-offset} />
+          );
+          offset += dash;
+          return el;
+        })}
+      </g>
+    </svg>
+  );
+}
+
+/* ==================================================================================== */
+function App() {
+  const [tab, setTab] = useState("upload");
+  const [accounts, setAccounts] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [debts, setDebts] = useState([]);
+  const [efundBalance, setEfundBalance] = useState(0);
+  const [quizAnswers, setQuizAnswers] = useState({});
+  const [quizStep, setQuizStep] = useState(0);
+  const fileInputRef = useRef(null);
+  const [pendingCC, setPendingCC] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await window.storage.get("cfc:profile");
+        if (r && r.value) {
+          const p = JSON.parse(r.value);
+          if (p.debts) setDebts(p.debts);
+          if (p.efundBalance) setEfundBalance(p.efundBalance);
+          if (p.quizAnswers) setQuizAnswers(p.quizAnswers);
+        }
+      } catch (e) { /* no saved profile yet */ }
+      setLoaded(true);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      window.storage.set("cfc:profile", JSON.stringify({ debts, efundBalance, quizAnswers })).catch(() => {});
+    } catch (e) {}
+  }, [debts, efundBalance, quizAnswers, loaded]);
+
+  const handleFiles = (files, isCC) => {
+    Array.from(files).forEach((file) => {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (res) => {
+          const headers = res.meta.fields || [];
+          const dateCol = findCol(headers, ["date"]);
+          const descCol = findCol(headers, ["description", "payee", "merchant", "name"]);
+          const amountCol = findCol(headers, ["amount"]);
+          const debitCol = findCol(headers, ["debit"]);
+          const creditCol = findCol(headers, ["credit"]);
+          const accountId = uid();
+          const newTx = res.data.map((row) => {
+            let amt = 0;
+            if (amountCol) amt = parseMoney(row[amountCol]);
+            else if (debitCol || creditCol) amt = parseMoney(row[creditCol]) - parseMoney(row[debitCol]);
+            if (isCC) amt = -amt;
+            const desc = descCol ? row[descCol] : Object.values(row).join(" ");
+            return {
+              id: uid(), accountId,
+              date: dateCol ? row[dateCol] : "",
+              description: desc || "(no description)",
+              amount: amt,
+              category: categorize(desc, amt),
+            };
+          }).filter((t) => t.description && !isNaN(t.amount) && t.amount !== 0);
+          setAccounts((prev) => [...prev, { id: accountId, name: file.name, isCC, count: newTx.length }]);
+          setTransactions((prev) => [...prev, ...newTx]);
+        },
+      });
+    });
+  };
+
+  const removeAccount = (id) => {
+    setAccounts((prev) => prev.filter((a) => a.id !== id));
+    setTransactions((prev) => prev.filter((t) => t.accountId !== id));
+  };
+  const updateCategory = (id, cat) => {
+    setTransactions((prev) => prev.map((t) => (t.id === id ? { ...t, category: cat } : t)));
+  };
+
+  const agg = useMemo(() => {
+    if (transactions.length === 0) return null;
+    const dates = transactions.map((t) => new Date(t.date)).filter((d) => !isNaN(d));
+    let monthsSpan = 1;
+    if (dates.length > 1) {
+      const min = new Date(Math.min.apply(null, dates)), max = new Date(Math.max.apply(null, dates));
+      monthsSpan = Math.max(1, Math.round((max - min) / (1000 * 60 * 60 * 24 * 30)));
+    }
+    const byCat = {};
+    let totalIncome = 0;
+    transactions.forEach((t) => {
+      if (t.category === "Income" || t.category === "Income (other)") {
+        if (t.amount > 0) totalIncome += t.amount;
+        return;
+      }
+      const spend = t.amount < 0 ? -t.amount : 0;
+      byCat[t.category] = (byCat[t.category] || 0) + spend;
+    });
+    const monthlyIncome = totalIncome / monthsSpan;
+    const catRows = Object.entries(byCat)
+      .map(([category, total]) => ({ category, total, monthly: total / monthsSpan, pctOfIncome: monthlyIncome ? (total / monthsSpan) / monthlyIncome : 0 }))
+      .sort((a, b) => b.monthly - a.monthly);
+    const totalMonthlyExpense = catRows.reduce((s, r) => s + r.monthly, 0);
+    return { monthsSpan, monthlyIncome, catRows, totalMonthlyExpense };
+  }, [transactions]);
+
+  const guardrails = useMemo(() => {
+    if (!agg) return [];
+    return agg.catRows.filter((r) => BENCHMARKS[r.category] !== undefined)
+      .map((r) => ({ ...r, benchmark: BENCHMARKS[r.category], over: r.pctOfIncome > BENCHMARKS[r.category] }));
+  }, [agg]);
+
+  const quizComplete = Object.keys(quizAnswers).length === QUIZ.length;
+  const quizResult = useMemo(() => (quizComplete ? scoreQuiz(quizAnswers) : null), [quizAnswers, quizComplete]);
+
+  const strategy = useMemo(() => {
+    if (!agg || !quizResult) return null;
+    const archetype = ARCHETYPES[quizResult.archetype];
+    const minPayTotal = debts.reduce((s, d) => s + d.minPayment, 0);
+    const leftover = Math.max(0, agg.monthlyIncome - agg.totalMonthlyExpense - minPayTotal);
+    const efundTarget = archetype.efundMonths * agg.totalMonthlyExpense;
+    const efundGap = Math.max(0, efundTarget - efundBalance);
+    const monthsToFillEfund = leftover > 0 ? Math.ceil(efundGap / leftover) : Infinity;
+    const extraForDebtNow = efundGap > 0 ? leftover * archetype.splitDuringEfund.debt : leftover * archetype.splitAfterEfund.debt;
+    const extraForSavingsNow = leftover - extraForDebtNow;
+    const sim = simulateDebtPayoff(debts, Math.max(0, extraForDebtNow || (efundGap > 0 ? 0 : leftover * archetype.splitAfterEfund.debt)), archetype.method);
+    return { archetype, leftover, efundTarget, efundGap, monthsToFillEfund, extraForDebtNow, extraForSavingsNow, sim, minPayTotal };
+  }, [agg, quizResult, debts, efundBalance]);
+
+  const fmt = (n) => n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+
+  const NAV = [
+    { id: "upload", label: "Accounts", icon: "upload" },
+    { id: "transactions", label: "Transactions", icon: "list", disabled: transactions.length === 0 },
+    { id: "debts", label: "Debts & Savings", icon: "landmark" },
+    { id: "quiz", label: "Money Personality", icon: "brain" },
+    { id: "strategy", label: "Your Strategy", icon: "trendingUp", disabled: !agg || !quizComplete },
+  ];
+
+  return (
+    <div style={{ fontFamily: "'Inter', sans-serif", background: T.parchment, color: T.ink, minHeight: "100vh", display: "flex" }}>
+      <div style={{ width: 230, borderRight: `1px solid ${T.line}`, padding: "24px 14px", flexShrink: 0 }}>
+        <div style={{ padding: "0 6px 24px" }}>
+          <div className="display" style={{ fontSize: 20, fontWeight: 600, color: T.burgundy, lineHeight: 1.2 }}>Cashflow<br />Compass</div>
+        </div>
+        {NAV.map((n) => (
+          <div key={n.id} className={`navbtn ${tab === n.id ? "active" : ""} ${n.disabled ? "disabled" : ""}`}
+            onClick={() => !n.disabled && setTab(n.id)}>
+            <Icon name={n.icon} size={16} /> {n.label}
+          </div>
+        ))}
+        <div style={{ marginTop: 24, padding: "12px 10px", fontSize: 11.5, color: T.inkSoft, lineHeight: 1.5, borderTop: `1px solid ${T.line}` }}>
+          Transaction data lives in this session only. Debts, savings, and your personality profile are saved.
+        </div>
+      </div>
+
+      <div style={{ flex: 1, padding: "32px 40px", maxWidth: 980 }}>
+        {tab === "upload" && (
+          <div>
+            <h1 className="display" style={{ fontSize: 26, marginBottom: 4 }}>Connect your accounts</h1>
+            <p style={{ color: T.inkSoft, marginBottom: 24, fontSize: 14.5 }}>Upload CSV exports from your bank or credit card. Most banks let you export statements as CSV from online banking.</p>
+
+            <div className="card" style={{ marginBottom: 20 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14 }}>
+                  <input type="checkbox" checked={pendingCC} onChange={(e) => setPendingCC(e.target.checked)} />
+                  This file is a credit card statement (charges show as positive numbers)
+                </label>
+              </div>
+              <input ref={fileInputRef} type="file" accept=".csv" multiple style={{ display: "none" }}
+                onChange={(e) => { handleFiles(e.target.files, pendingCC); e.target.value = ""; }} />
+              <button className="btn" onClick={() => fileInputRef.current.click()}><Icon name="upload" size={15} /> Upload CSV file(s)</button>
+              <div style={{ fontSize: 12.5, color: T.inkSoft, marginTop: 10 }}>
+                Expected columns: a date column, a description/payee column, and either an Amount column or separate Debit/Credit columns. Column names are auto-detected.
+              </div>
+            </div>
+
+            {accounts.length > 0 && (
+              <div className="card">
+                <div style={{ fontWeight: 600, marginBottom: 12, fontSize: 14 }}>Uploaded accounts</div>
+                {accounts.map((a) => (
+                  <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${T.line}` }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <Icon name="fileText" size={15} color={T.inkSoft} />
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 500 }}>{a.name}</div>
+                        <div style={{ fontSize: 12, color: T.inkSoft }}>{a.count} transactions · {a.isCC ? "credit card" : "bank account"}</div>
+                      </div>
+                    </div>
+                    <Icon name="trash" size={16} color={T.clay} style={{ cursor: "pointer" }} onClick={() => removeAccount(a.id)} />
+                  </div>
+                ))}
+                <button className="btn ghost" style={{ marginTop: 14 }} onClick={() => setTab("transactions")}>
+                  Review categorization <Icon name="arrowRight" size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "transactions" && agg && (
+          <div>
+            <h1 className="display" style={{ fontSize: 26, marginBottom: 4 }}>Spending picture</h1>
+            <p style={{ color: T.inkSoft, marginBottom: 22, fontSize: 14.5 }}>
+              Based on ~{agg.monthsSpan} month{agg.monthsSpan > 1 ? "s" : ""} of data · Avg monthly income <span className="mono">{fmt(agg.monthlyIncome)}</span> · Avg monthly spend <span className="mono">{fmt(agg.totalMonthlyExpense)}</span>
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
+              <div className="card" style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+                <DonutChart data={agg.catRows} />
+              </div>
+              <div className="card">
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>Top categories</div>
+                {agg.catRows.slice(0, 7).map((r) => (
+                  <div key={r.category} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 }}>
+                      <div style={{ width: 9, height: 9, borderRadius: 2, background: catColor(r.category) }} />
+                      {r.category}
+                    </div>
+                    <div className="mono" style={{ fontSize: 13.5 }}>{fmt(r.monthly)}/mo</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card">
+              <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 10 }}>All transactions ({transactions.length})</div>
+              <div style={{ maxHeight: 420, overflowY: "auto" }}>
+                <table>
+                  <thead><tr><th>Date</th><th>Description</th><th style={{ textAlign: "right" }}>Amount</th><th>Category</th></tr></thead>
+                  <tbody>
+                    {transactions.slice().sort((a, b) => new Date(b.date) - new Date(a.date)).map((t) => (
+                      <tr key={t.id}>
+                        <td style={{ whiteSpace: "nowrap", color: T.inkSoft }}>{t.date}</td>
+                        <td>{t.description}</td>
+                        <td className="mono" style={{ textAlign: "right", color: t.amount < 0 ? T.clay : T.sage }}>{fmt(t.amount)}</td>
+                        <td>
+                          <select value={t.category} onChange={(e) => updateCategory(t.id, e.target.value)}>
+                            {ALL_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+        {tab === "transactions" && !agg && (
+          <div className="card"><p>Upload at least one account to see your spending picture.</p></div>
+        )}
+
+        {tab === "debts" && (
+          <DebtsTab debts={debts} setDebts={setDebts} efundBalance={efundBalance} setEfundBalance={setEfundBalance} fmt={fmt} />
+        )}
+
+        {tab === "quiz" && (
+          <QuizTab quizAnswers={quizAnswers} setQuizAnswers={setQuizAnswers} quizStep={quizStep} setQuizStep={setQuizStep}
+            quizComplete={quizComplete} quizResult={quizResult} setTab={setTab} agg={agg} />
+        )}
+
+        {tab === "strategy" && agg && quizResult && strategy && (
+          <StrategyTab agg={agg} strategy={strategy} guardrails={guardrails} debts={debts} efundBalance={efundBalance} fmt={fmt} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DebtsTab({ debts, setDebts, efundBalance, setEfundBalance, fmt }) {
+  const [form, setForm] = useState({ name: "", balance: "", apr: "", minPayment: "" });
+  const add = () => {
+    if (!form.name || !form.balance) return;
+    setDebts((prev) => [...prev, {
+      id: uid(), name: form.name,
+      balance: parseFloat(form.balance) || 0, apr: parseFloat(form.apr) || 0, minPayment: parseFloat(form.minPayment) || 0,
+    }]);
+    setForm({ name: "", balance: "", apr: "", minPayment: "" });
+  };
+  return (
+    <div>
+      <h1 className="display" style={{ fontSize: 26, marginBottom: 4 }}>Debts & savings</h1>
+      <p style={{ color: "#5B4A42", marginBottom: 22, fontSize: 14.5 }}>Statements don't tell us balances or interest rates — add those here so the strategy engine can build a real payoff plan.</p>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Current emergency savings</div>
+        <input type="number" placeholder="0" value={efundBalance || ""} onChange={(e) => setEfundBalance(parseFloat(e.target.value) || 0)} style={{ width: 160 }} />
+      </div>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Add a debt</div>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+          <input type="text" placeholder="Name (e.g. Discover card)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} style={{ width: 200 }} />
+          <input type="number" placeholder="Balance $" value={form.balance} onChange={(e) => setForm({ ...form, balance: e.target.value })} style={{ width: 120 }} />
+          <input type="number" placeholder="APR %" value={form.apr} onChange={(e) => setForm({ ...form, apr: e.target.value })} style={{ width: 100 }} />
+          <input type="number" placeholder="Min payment $" value={form.minPayment} onChange={(e) => setForm({ ...form, minPayment: e.target.value })} style={{ width: 130 }} />
+        </div>
+        <button className="btn" onClick={add}><Icon name="plusCircle" size={15} /> Add debt</button>
+      </div>
+
+      {debts.length > 0 && (
+        <div className="card">
+          <table>
+            <thead><tr><th>Debt</th><th>Balance</th><th>APR</th><th>Min payment</th><th></th></tr></thead>
+            <tbody>
+              {debts.map((d) => (
+                <tr key={d.id}>
+                  <td>{d.name}</td>
+                  <td className="mono">{fmt(d.balance)}</td>
+                  <td className="mono">{d.apr}%</td>
+                  <td className="mono">{fmt(d.minPayment)}/mo</td>
+                  <td><Icon name="trash" size={15} color="#A8493E" style={{ cursor: "pointer" }} onClick={() => setDebts((p) => p.filter((x) => x.id !== d.id))} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuizTab({ quizAnswers, setQuizAnswers, quizStep, setQuizStep, quizComplete, quizResult, setTab, agg }) {
+  if (quizComplete && quizResult) {
+    const a = ARCHETYPES[quizResult.archetype];
+    return (
+      <div>
+        <h1 className="display" style={{ fontSize: 26, marginBottom: 16 }}>Your money personality</h1>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <Icon name="sparkles" size={18} color="#7D141D" />
+            <div className="display" style={{ fontSize: 22, fontWeight: 600, color: "#7D141D" }}>{a.name}</div>
+          </div>
+          <div style={{ fontSize: 14.5, color: "#5B4A42", marginBottom: 10, fontStyle: "italic" }}>{a.tagline}</div>
+          <p style={{ fontSize: 14.5, lineHeight: 1.6 }}>{a.blurb}</p>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="btn ghost" onClick={() => { setQuizAnswers({}); setQuizStep(0); }}>Retake quiz</button>
+          {agg && <button className="btn" onClick={() => setTab("strategy")}>See my strategy <Icon name="chevronRight" size={15} /></button>}
+        </div>
+      </div>
+    );
+  }
+
+  const q = QUIZ[quizStep];
+  return (
+    <div>
+      <h1 className="display" style={{ fontSize: 26, marginBottom: 4 }}>Money personality assessment</h1>
+      <p style={{ color: "#5B4A42", marginBottom: 22, fontSize: 14.5 }}>Question {quizStep + 1} of {QUIZ.length}</p>
+      <div className="card" style={{ maxWidth: 620 }}>
+        <div style={{ fontSize: 16.5, fontWeight: 500, marginBottom: 18 }}>{q.q}</div>
+        {q.opts.map((o, i) => (
+          <div key={i} className="quiz-opt" onClick={() => {
+            setQuizAnswers((prev) => ({ ...prev, [quizStep]: i }));
+            if (quizStep < QUIZ.length - 1) setQuizStep(quizStep + 1);
+          }}>
+            {o.t}
+          </div>
+        ))}
+      </div>
+      {quizStep > 0 && <button className="btn ghost" style={{ marginTop: 14 }} onClick={() => setQuizStep(quizStep - 1)}>Back</button>}
+    </div>
+  );
+}
+
+function StrategyTab({ agg, strategy, guardrails, debts, efundBalance, fmt }) {
+  const { archetype, efundTarget, efundGap, monthsToFillEfund, extraForDebtNow, extraForSavingsNow, sim, minPayTotal } = strategy;
+  const overGuardrails = guardrails.filter((g) => g.over);
+
+  const segments = [
+    { label: "Fixed expenses", val: agg.totalMonthlyExpense, color: "#8B6F47" },
+    { label: "Debt minimums", val: minPayTotal, color: "#3D3128" },
+    { label: "Extra to savings", val: extraForSavingsNow, color: "#6B7A56" },
+    { label: "Extra to debt", val: extraForDebtNow, color: "#7D141D" },
+  ].filter((s) => s.val > 0.5);
+  const totalBar = segments.reduce((s, x) => s + x.val, 0) || 1;
+
+  return (
+    <div>
+      <h1 className="display" style={{ fontSize: 26, marginBottom: 4 }}>Your strategy — {archetype.name}</h1>
+      <p style={{ color: "#5B4A42", marginBottom: 22, fontSize: 14.5 }}>Built from your spending, your debts, and your money personality.</p>
+
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 12 }}>Where your {fmt(agg.monthlyIncome)}/mo goes</div>
+        <div style={{ display: "flex", height: 34, borderRadius: 6, overflow: "hidden", border: "1px solid #DDD3C7" }}>
+          {segments.map((s, i) => (
+            <div key={i} style={{ width: `${(s.val / totalBar) * 100}%`, background: s.color }} title={`${s.label}: ${fmt(s.val)}`} />
+          ))}
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 12 }}>
+          {segments.map((s, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5 }}>
+              <div style={{ width: 9, height: 9, borderRadius: 2, background: s.color }} />
+              {s.label}: <span className="mono">{fmt(s.val)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+        <div className="card">
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <Icon name="piggyBank" size={17} color="#6B7A56" />
+            <div style={{ fontWeight: 600, fontSize: 14 }}>Emergency fund</div>
+          </div>
+          <div style={{ fontSize: 13.5, lineHeight: 1.7 }}>
+            Target for your profile: <span className="mono">{fmt(efundTarget)}</span> ({archetype.efundMonths} months of expenses)<br />
+            Current: <span className="mono">{fmt(efundBalance)}</span><br />
+            {efundGap > 0
+              ? <>Gap: <span className="mono">{fmt(efundGap)}</span> — filled in ~{isFinite(monthsToFillEfund) ? monthsToFillEfund : "—"} months at current pace</>
+              : <span style={{ color: "#6B7A56" }}>Target met — full leftover cash flow is going to debt.</span>}
+          </div>
+        </div>
+        <div className="card">
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <Icon name="creditCard" size={17} color="#7D141D" />
+            <div style={{ fontWeight: 600, fontSize: 14 }}>Debt payoff — {archetype.method === "avalanche" ? "Avalanche (highest APR first)" : "Snowball (smallest balance first)"}</div>
+          </div>
+          {debts.length === 0 ? (
+            <div style={{ fontSize: 13.5, color: "#5B4A42" }}>No debts entered — add them in the Debts & Savings tab.</div>
+          ) : (
+            <div style={{ fontSize: 13.5, lineHeight: 1.7 }}>
+              Est. time to debt-free: <span className="mono">{sim.months} months</span> (~{(sim.months / 12).toFixed(1)} yrs)<br />
+              Est. total interest paid: <span className="mono">{fmt(sim.totalInterest)}</span><br />
+              Payoff order: {sim.order.join(" → ") || "—"}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+          <Icon name="alertTriangle" size={17} color="#B8862E" />
+          <div style={{ fontWeight: 600, fontSize: 14 }}>Spending guardrails</div>
+        </div>
+        {guardrails.length === 0 && <div style={{ fontSize: 13.5, color: "#5B4A42" }}>Not enough categorized spending to check guardrails yet.</div>}
+        {guardrails.map((g) => (
+          <div key={g.category} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #DDD3C7", fontSize: 13.5 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {g.over ? <Icon name="alertTriangle" size={13} color="#A8493E" /> : <Icon name="check" size={13} color="#6B7A56" />}
+              {g.category}
+            </div>
+            <div className="mono" style={{ color: g.over ? "#A8493E" : "#5B4A42" }}>
+              {(g.pctOfIncome * 100).toFixed(1)}% of income (benchmark {(g.benchmark * 100).toFixed(0)}%)
+            </div>
+          </div>
+        ))}
+        {overGuardrails.length > 0 && (
+          <div style={{ marginTop: 12, fontSize: 13, color: "#5B4A42" }}>
+            {overGuardrails.length} categor{overGuardrails.length > 1 ? "ies are" : "y is"} running above typical benchmarks — trimming these frees up cash toward your current target faster.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>
